@@ -1,6 +1,6 @@
-FROM harbor.daocloud.cn/etc/centos:centos7.9.2009
+FROM centos
 
 RUN mkdir -p /tmp/info
 COPY recover.sh /tmp/info
 COPY README.md /tmp/info
-COPY delete_badIPPod.sh /tmp/info
+COPY script/delete_badIPPod.sh /tmp/info
