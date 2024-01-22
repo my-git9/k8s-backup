@@ -1,0 +1,1 @@
+build,../Dockerfile,harbor.daocloud.cn/etc/dce-etcd-back:0.0.8

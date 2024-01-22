@@ -1,0 +1,3 @@
+# 类型(build:构建，image: 下载),镜像构建的dockerfile或源镜像的地址,目标镜像(规范镜像仓库写daocloud.io)
+build,../Dockerfile,daocloud.io/kube-backup:v1.17.1
+image,harbor.daocloud.cn/etc/hyperkube:v1.5.4,harbor.daocloud.cn/etc/hyperkube:v1.5.4

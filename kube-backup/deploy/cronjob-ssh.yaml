@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-backup
+  namespace: kube-backup
+
+---
+
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: kube-state-backup
+  namespace: kube-backup
+  labels:
+    app: kube-backup
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Allow
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: kube-backup
+          name: kube-backup
+        spec:
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    values:
+                    - amd64
+                    operator: In
+          containers:
+          - image: $REGISTRY/$KUBEBACKUP_IMAGENAME
+            imagePullPolicy: Always
+            name: backup
+            resources: {}
+            securityContext:
+              runAsUser: 1000
+            env:
+            - name: GIT_REPO
+              value: $KUBEBACKUP_GIT_REPO
+            - name: RESOURCETYPES
+              value: $KUBEBACKUP_RESOURCETYPES
+            - name: GIT_PREFIX_PATH
+              value: $KUBEBACKUP_GIT_PREFIX_PATH
+            - name: GIT_BRANCH
+              value: $KUBEBACKUP_GIT_BRANCH
+            volumeMounts:
+            - mountPath: /backup/
+              name: cache
+            - mountPath: /backup/.ssh
+              name: sshkey
+          dnsPolicy: ClusterFirst
+          terminationGracePeriodSeconds: 30
+          serviceAccountName: kube-backup
+          volumes:
+          - name: sshkey
+            secret:
+              defaultMode: 420
+              secretName: kube-backup-ssh
+          - name: cache
+            emptyDir: {}
+          restartPolicy: OnFailure
