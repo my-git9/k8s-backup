@@ -6,15 +6,93 @@
 2、执行 `./manifest_images_build.sh` 制作混合镜像(如果主节点不存在arm64架构主机，此步骤跳过)
 3、执行 `/install.sh` 创建备份任务
 
-## 恢复
+## 开源 Kubernetes 恢复
+
+***以下恢复 etcd 数据的每一步都需要在每一台 Master 上同步执行。***
+- 在所有 Master 上运行恢复脚本**每行输入 MasterHostname MasterIP（输入 3 个master节点信息）**，以空格隔开，回车：
+
+```shell
+$./recover.sh
+Please input the master hostname ips  to be recovered, and seperated them with a blank space(must 3 nodes in 3 lines).
+
+Example:
+   master-10-29-22-5 10.29.22.5
+   master-10-29-22-6 10.29.22.6
+   master-10-29-22-7 10.29.22.7
+
+master-10-29-22-5 10.29.22.5
+master-10-29-22-6 10.29.22.6
+master-10-29-22-7 10.29.22.7
+```
+
+- 输入数据的 db 文件的全路径，回车：
+
+```shell
+Please input the etcd V3 db file you want to recover with full path, and make sure it exists on all the masters.
+
+Example:
+  /tmp/etcd_backup/backup_v3_20240126161041.db
+
+# 输入 db 文件路径
+/tmp/etcd_backup/backup_v3_20240126161041.db
+```
+
+- 输入本地的IP，回车
+```shell
+# 以下 IP 修改为自己的 IP 路径
+Please input local ip address for etcd endpoint.
+
+Example:
+  10.29.22.5
+  
+10.29.22.6
+```
+
+- 在所有 Master 上回车确认，等所有 Master 节点上都有以下输出时，再同时回车确认：
+
+```shell
+Please make sure you press enter at the same time on all the masters, ready to stop all the API server instances?
+
+All the API server yaml files have been moved from /etc/kubernetes/manifests to /tmp/yaml_bak
+Etcd data directory has been moved from /var/local/dce/etcd/etcd to /var/local/dce/etcd/etcd_backup_20240126182258 as backup.
+Starting to recover etcd cluster...
+2024-01-26T18:23:28+08:00	info	snapshot/v3_snapshot.go:248	restoring snapshot	{"path": "/tmp/etcd_backup/backup_v3_20240126161041.db", "wal-dir": "/var/lib/etcd/member/wal", "data-dir": "/var/lib/etcd", "snap-dir": "/var/lib/etcd/member/snap", "stack": "go.etcd.io/etcd/etcdutl/v3/snapshot.(*v3Manager).Restore\n\tgo.etcd.io/etcd/etcdutl/v3/snapshot/v3_snapshot.go:254\ngo.etcd.io/etcd/etcdutl/v3/etcdutl.SnapshotRestoreCommandFunc\n\tgo.etcd.io/etcd/etcdutl/v3/etcdutl/snapshot_command.go:147\ngo.etcd.io/etcd/etcdutl/v3/etcdutl.snapshotRestoreCommandFunc\n\tgo.etcd.io/etcd/etcdutl/v3/etcdutl/snapshot_command.go:117\ngithub.com/spf13/cobra.(*Command).execute\n\tgithub.com/spf13/cobra@v1.1.3/command.go:856\ngithub.com/spf13/cobra.(*Command).ExecuteC\n\tgithub.com/spf13/cobra@v1.1.3/command.go:960\ngithub.com/spf13/cobra.(*Command).Execute\n\tgithub.com/spf13/cobra@v1.1.3/command.go:897\nmain.Start\n\tgo.etcd.io/etcd/etcdutl/v3/ctl.go:50\nmain.main\n\tgo.etcd.io/etcd/etcdutl/v3/main.go:23\nruntime.main\n\truntime/proc.go:225"}
+2024-01-26T18:23:28+08:00	info	membership/store.go:141	Trimming membership information from the backend...
+2024-01-26T18:23:28+08:00	info	membership/cluster.go:421	added member	{"cluster-id": "bae2b55414f4662c", "local-member-id": "0", "added-peer-id": "65ed2c9102a64d", "added-peer-peer-urls": ["https://10.29.22.5:2380"]}
+2024-01-26T18:23:28+08:00	info	membership/cluster.go:421	added member	{"cluster-id": "bae2b55414f4662c", "local-member-id": "0", "added-peer-id": "1e9a798d6e3ede5a", "added-peer-peer-urls": ["https://10.29.22.7:2380"]}
+2024-01-26T18:23:28+08:00	info	membership/cluster.go:421	added member	{"cluster-id": "bae2b55414f4662c", "local-member-id": "0", "added-peer-id": "6a93390c1325f78e", "added-peer-peer-urls": ["https://10.29.22.6:2380"]}
+2024-01-26T18:23:28+08:00	info	snapshot/v3_snapshot.go:269	restored snapshot	{"path": "/tmp/etcd_backup/backup_v3_20240126161041.db", "wal-dir": "/var/lib/etcd/member/wal", "data-dir": "/var/lib/etcd", "snap-dir": "/var/lib/etcd/member/snap"}
+```
+
+- 当所有 Master 都有如下返回时，说明此时 etcd 集群是健康状态，同时回车进行下一步，等待 etcd 启动：
+```shell
+Please make sure you press enter at the same time on all the masters, ready to start etcd instances?
+
+Etcd yaml file has been moved from /tmp/yaml_bak/etcd.yaml to /etc/kubernetes/manifests/etcd.yaml, waiting for etcd instances ready...
+Please make sure you press enter at the same time on all the masters, ready to check etcd cluster health?
+```
+
+- 当所有 Master 都有如下返回时，说明此时 etcd 集群是健康状态，同时回车进行下一步，等待 etcd 启动：
+```shell
+Etcd cluster health status：
+65ed2c9102a64d, started, master-10-29-22-5, https://10.29.22.5:2380, https://10.29.22.5:2379, false
+1e9a798d6e3ede5a, started, master-10-29-22-7, https://10.29.22.7:2380, https://10.29.22.7:2379, false
+6a93390c1325f78e, started, master-10-29-22-6, https://10.29.22.6:2380, https://10.29.22.6:2379, false
+Etcd cluster has been successfully recovered. Please make sure you press enter at the same time on all the masters, ready to recover all the API server instances?
+```
+
+- 等待 1 分支后，尝试执行 kubectl 命令查看集群信息是否正常
+
+## DCE4 恢复
 
 ### 恢复 V3 数据
+
 ***以下恢复 V3 数据的每一步都需要在每一台 Master 上同步执行。***
 - 在所有 Master 上运行恢复脚本并输入所有 Master的IP，以空格隔开，回车：
 
 ```shell
 # 以下所有 IP 记得修改为自己的
-./recover.sh
+./recover-dce4.sh
 Please input the master ips to be recovered, and seperated them with a blank space.
 10.6.120.5 10.6.120.6 10.6.120.9
 ```

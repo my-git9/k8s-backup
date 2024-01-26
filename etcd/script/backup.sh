@@ -1,5 +1,4 @@
 #!/bin/bash
-
 calicoLockMode="lock"
 calicoUnlockMode="unlock"
 inputLockMode=$calicoLockMode
@@ -18,7 +17,9 @@ else
   exit 1
 fi
 
-etcd_container=`nerdctl ps |grep etcd-master | grep -v pause | awk '{print $1}'`
+echo $(hostname)
+
+etcd_container=`nerdctl ps |grep etcd |grep $(hostname)  | grep -v pause | awk '{print $1}'`
 cluster_health=`nerdctl exec -it -e ETCDCTL_API=3 $etcd_container -- etcdctl --cert=/etc/kubernetes/ssl/etcd/server.crt --key=/etc/kubernetes/ssl/etcd/server.key --cacert=/etc/kubernetes/ssl/etcd/ca.crt endpoint health --cluster |grep unhealthy`
 echo "Etcd cluster health status： $cluster_health"
 if [ "$cluster_health" != "" ]; then
@@ -26,7 +27,8 @@ if [ "$cluster_health" != "" ]; then
     exit
 else
     mkdir -p /tmp/etcd_backup
-    nerdctl cp `nerdctl ps |grep etcd-master | grep -v pause | awk '{print $1}'`:/usr/local/bin/etcdutl /tmp/etcd_backup/etcdutl
+    nerdctl cp `nerdctl ps |grep etcd |grep $(hostname) | grep -v pause | awk '{print $1}'`:/usr/local/bin/etcdutl /tmp/etcd_backup/etcdutl
+    nerdctl cp `nerdctl ps |grep etcd |grep $(hostname)  | grep -v pause | awk '{print $1}'`:/usr/local/bin/etcdctl /tmp/etcd_backup/etcdctl
     echo "Please input the directory where you want to save the etcd backup data，default will be /tmp/etcd_backup"
     #read backup_dir
     echo "$backup_dir"
