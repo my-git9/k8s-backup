@@ -54,7 +54,7 @@ Example:
 Please make sure you press enter at the same time on all the masters, ready to stop all the API server instances?
 
 All the API server yaml files have been moved from /etc/kubernetes/manifests to /tmp/yaml_bak
-Etcd data directory has been moved from /var/local/dce/etcd/etcd to /var/local/dce/etcd/etcd_backup_20240126182258 as backup.
+Etcd data directory has been moved from /var/lib/etcd to /var/lib/etcd/etcdback/etcd_backup_20240126182258 as backup.
 Starting to recover etcd cluster...
 2024-01-26T18:23:28+08:00	info	snapshot/v3_snapshot.go:248	restoring snapshot	{"path": "/tmp/etcd_backup/backup_v3_20240126161041.db", "wal-dir": "/var/lib/etcd/member/wal", "data-dir": "/var/lib/etcd", "snap-dir": "/var/lib/etcd/member/snap", "stack": "go.etcd.io/etcd/etcdutl/v3/snapshot.(*v3Manager).Restore\n\tgo.etcd.io/etcd/etcdutl/v3/snapshot/v3_snapshot.go:254\ngo.etcd.io/etcd/etcdutl/v3/etcdutl.SnapshotRestoreCommandFunc\n\tgo.etcd.io/etcd/etcdutl/v3/etcdutl/snapshot_command.go:147\ngo.etcd.io/etcd/etcdutl/v3/etcdutl.snapshotRestoreCommandFunc\n\tgo.etcd.io/etcd/etcdutl/v3/etcdutl/snapshot_command.go:117\ngithub.com/spf13/cobra.(*Command).execute\n\tgithub.com/spf13/cobra@v1.1.3/command.go:856\ngithub.com/spf13/cobra.(*Command).ExecuteC\n\tgithub.com/spf13/cobra@v1.1.3/command.go:960\ngithub.com/spf13/cobra.(*Command).Execute\n\tgithub.com/spf13/cobra@v1.1.3/command.go:897\nmain.Start\n\tgo.etcd.io/etcd/etcdutl/v3/ctl.go:50\nmain.main\n\tgo.etcd.io/etcd/etcdutl/v3/main.go:23\nruntime.main\n\truntime/proc.go:225"}
 2024-01-26T18:23:28+08:00	info	membership/store.go:141	Trimming membership information from the backend...

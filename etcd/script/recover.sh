@@ -31,17 +31,12 @@ read db
 echo "Please input local ip address for etcd endpoint."
 echo
 echo "Example:"
-echo "  10.29.22.5"
+echo "  "$(hostname -I |awk '{print $1}')
 echo
 read hostip
 
 initial_cluster="--initial-cluster "
 num_in=0
-#for ip in "${cluster_member[@]}"
-#do
-#    initial_cluster="${initial_cluster}dce-etcd-$ip=http://$ip:2380,"
-#    num_in=$((num_in+1))
-#done
 initial_cluster=${initial_cluster}${memberhostname1}=https://${memberhostip1}:2380,${memberhostname2}=https://${memberhostip2}:2380,${memberhostname3}=https://${memberhostip3}:2380
 
 mkdir -p /tmp/yaml_bak
@@ -52,8 +47,9 @@ mv /etc/kubernetes/manifests/*.yaml /tmp/yaml_bak/
 echo "All the API server yaml files have been moved from /etc/kubernetes/manifests to /tmp/yaml_bak"
 
 timestamp=`date +"%Y%m%d%H%M%S"`
-mv /var/lib/etcd /var/lib/etcd_backup_${timestamp}
-echo "Etcd data directory has been moved from /var/local/dce/etcd/etcd to /var/local/dce/etcd/etcd_backup_${timestamp} as backup."
+mkdir /var/lib/etcdback
+mv /var/lib/etcd /var/lib/etcdback/etcd_backup_${timestamp}
+echo "Etcd data directory has been moved from /var/lib/etcd to /var/lib/etcdback/etcd_backup_${timestamp} as backup."
 endpoint="--endpoints=https://localhost:2379"
 cert="--cert=/etc/kubernetes/ssl/etcd/server.crt --key=/etc/kubernetes/ssl/etcd/server.key --cacert=/etc/kubernetes/ssl/etcd/ca.crt"
 param=${endpoint}" "${cert}

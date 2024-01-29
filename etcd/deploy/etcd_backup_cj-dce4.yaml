@@ -33,8 +33,8 @@ data:
       echo "You will backup with calico ipam lock."
     fi
 
-    etcd_container=`nerctl ps |grep 'dce-etcd-dce' | grep -v pause | awk '{print $1}'`
-    cluster_health=`nerctl exec -e ETCDCTL_API=2 $etcd_container etcdctl cluster-health`
+    etcd_container=`docker ps |grep 'dce-etcd-dce' | grep -v pause | awk '{print $1}'`
+    cluster_health=`docker exec -e ETCDCTL_API=2 $etcd_container etcdctl cluster-health`
     echo "Etcd cluster health status： $cluster_health"
     health=$(echo ${cluster_health}| awk '{print $NF}')
     if [ "$health" != "healthy" ]; then
@@ -43,7 +43,7 @@ data:
     else
         mkdir -p /tmp/etcd_backup
         cp -f /tmp/info/* /tmp/etcd_backup/
-        nerctl cp `nerctl ps |grep etcd | grep -v pause | awk '{print $1}'`:/usr/local/bin/etcdctl /tmp/etcd_backup/etcdctl
+        docker cp `docker ps |grep etcd | grep -v pause | awk '{print $1}'`:/usr/local/bin/etcdctl /tmp/etcd_backup/etcdctl
         echo "Please input the directory where you want to save the etcd backup data，default will be /tmp/etcd_backup"
         read backup_dir
         echo "$backup_dir"
@@ -163,10 +163,10 @@ spec:
                 cpu: 1000m
                 memory: 1000Mi
             volumeMounts:
-              - name: nerctl
-                mountPath: /usr/bin/nerctl
-              - name: containerdsock
-                mountPath: /var/run/containerd/containerd.sock
+              - name: docker
+                mountPath: /usr/bin/docker
+              - name: dockersock
+                mountPath: /var/run/docker.sock
               - name: backupdir
                 mountPath: /tmp/etcd_backup
               - name: calicoctl
@@ -181,12 +181,12 @@ spec:
           tolerations:
             - operator: Exists
           volumes:
-            - name: nerdctl
+            - name: docker
               hostPath:
-                path: /usr/local/bin/nerdctl
-            - name: containerdsock
+                path: /usr/bin/docker
+            - name: dockersock
               hostPath:
-                path: /var/run/containerd/containerd.sock
+                path: /var/run/docker.sock
             - name: calicoctl
               hostPath:
                 path: /usr/sbin/calicoctl

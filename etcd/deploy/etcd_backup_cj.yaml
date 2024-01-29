@@ -1,0 +1,212 @@
+## TODO: 暂时不做这个 Crojob
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: etcd-backup
+    component: etcd-backup
+  name: etcd-backup
+  namespace: kube-backup
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: ""
+  volumeMode: Filesystem
+  volumeName: etcd-backup
+---
+apiVersion: v1
+data:
+  backup.sh: |
+    #!/bin/bash
+    kubelet_status=`systemctl status kubelet | sed -n 3p`
+    kubelet_status=($kubelet_status)
+    kubelet=${kubelet_status[1]}
+    if [ $kubelet != "active" ]; then
+        echo "[Error] Kubelet is not active now, please start kubelet before recovering etcd."
+        exit
+    else
+        echo "Please input the master hostname ips  to be recovered, and seperated them with a blank space(must 3 nodes in 3 lines)."
+        echo
+        echo "Example:"
+        echo "   master-10-29-22-5 10.29.22.5"
+        echo "   master-10-29-22-6 10.29.22.6"
+        echo "   master-10-29-22-7 10.29.22.7"
+        echo
+        read memberhostname1 memberhostip1
+        read memberhostname2 memberhostip2
+        read memberhostname3 memberhostip3
+    fi
+    echo "Please input the etcd V3 db file you want to recover with full path, and make sure it exists on all the masters."
+    echo
+    echo "Example:"
+    echo "  /tmp/etcd_backup/backup_v3_20240126161041.db"
+    echo
+
+    read db
+    #cluster_member=($master_member)
+    #hostips=$(hostname -I)
+    #ip_array=($hostips)
+    #hostip=${ip_array[0]}
+    echo "Please input local ip address for etcd endpoint."
+    echo
+    echo "Example:"
+    echo "  "$(hostname -I |awk '{print $1}')
+    echo
+    read hostip
+
+    initial_cluster="--initial-cluster "
+    num_in=0
+    initial_cluster=${initial_cluster}${memberhostname1}=https://${memberhostip1}:2380,${memberhostname2}=https://${memberhostip2}:2380,${memberhostname3}=https://${memberhostip3}:2380
+
+    mkdir -p /tmp/yaml_bak
+    echo "Please make sure you press enter at the same time on all the masters, ready to stop all the API server instances?"
+    read answer
+
+    mv /etc/kubernetes/manifests/*.yaml /tmp/yaml_bak/
+    echo "All the API server yaml files have been moved from /etc/kubernetes/manifests to /tmp/yaml_bak"
+
+    timestamp=`date +"%Y%m%d%H%M%S"`
+    mkdir /var/lib/etcdback
+    mv /var/lib/etcd /var/lib/etcdback/etcd_backup_${timestamp}
+    echo "Etcd data directory has been moved from /var/lib/etcd to /var/lib/etcdback/etcd_backup_${timestamp} as backup."
+    endpoint="--endpoints=https://localhost:2379"
+    cert="--cert=/etc/kubernetes/ssl/etcd/server.crt --key=/etc/kubernetes/ssl/etcd/server.key --cacert=/etc/kubernetes/ssl/etcd/ca.crt"
+    param=${endpoint}" "${cert}
+    ETCDCTL_API=3
+    echo "Starting to recover etcd cluster..."
+    sleep 30
+
+    /tmp/etcd_backup/etcdutl snapshot restore $db --data-dir /var/lib/etcd --name=$(hostname) $initial_cluster --initial-advertise-peer-urls https://$hostip:2380
+    echo "Please make sure you press enter at the same time on all the masters, ready to start etcd instances?"
+    read answer
+
+    mv /tmp/yaml_bak/etcd.yaml /etc/kubernetes/manifests/etcd.yaml
+    echo "Etcd yaml file has been moved from /tmp/yaml_bak/etcd.yaml to /etc/kubernetes/manifests/etcd.yaml, waiting for etcd instances ready..."
+
+    retry_cnt=0
+    retry_total=30
+    while :
+    do
+        if [ $retry_total -gt $retry_cnt ]; then
+            etcd_container=`nerdctl ps |grep etcd |grep $(hostname) | grep -v pause | awk '{print $1}'`
+            if [ -n "$etcd_container" ];then
+                break
+            else
+                retry_cnt=$(($retry_cnt+1))
+                sleep 30
+            fi
+        else
+            echo "[Error] Start etcd instace failed."
+            exit 1
+        fi
+    done
+    echo "Please make sure you press enter at the same time on all the masters, ready to check etcd cluster health?"
+    read answer
+    cluster_health=`nerdctl exec -it -e ETCDCTL_API=3 $etcd_container -- etcdctl --cert=/etc/kubernetes/ssl/etcd/server.crt --key=/etc/kubernetes/ssl/etcd/server.key --cacert=/etc/kubernetes/ssl/etcd/ca.crt endpoint health --cluster |grep unhealthy`
+    echo "Etcd cluster health status： $cluster_health"
+    health=${cluster_health: 0-8 :7}
+    if [ "$cluster_health" != "" ]; then
+        echo "[Error] Etcd cluster is unhealthy now，please repair to healthy before backup."
+        exit
+    else
+        /tmp/etcd_backup/etcdctl $param member list
+    fi
+
+    echo "Etcd cluster has been successfully recovered. Please make sure you press enter at the same time on all the masters, ready to recover all the API server instances?"
+    read answer
+
+    mv /tmp/yaml_bak/kube-apiserver.yaml /etc/kubernetes/manifests/
+    sleep 5
+
+    echo "Restarting kubelet..."
+    systemctl restart kubelet
+    sleep 5
+
+    mv /tmp/yaml_bak/*.yaml /etc/kubernetes/manifests/
+    echo "Etcd V3 data has been successfully recovered, now you can recover V2 data on any one master."
+kind: ConfigMap
+metadata:
+  name: backup-etcd-code
+  namespace: kube-backup
+
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: etcd-backup
+  namespace: kube-backup
+spec:
+  # schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  schedule: "SCHEDULE"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          hostNetwork: true
+          containers:
+          - name: etcd-backup
+            image: IMAGE
+            imagePullPolicy: Always
+            command:
+              - "/bin/sh"
+              - "/root/backup.sh"
+            env:
+            - name: ETCD_BACKUP_DIR
+              value: "/backup"
+            - name: RETENTION_POLICY
+              value: ETCD_RETENTION_POLICY
+            - name: RETENTION
+              value: ETCD_RETENTION
+            - name: LOCK
+              value: CALICO_LOCK
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 1000Mi
+            volumeMounts:
+              - name: nerctl
+                mountPath: /usr/bin/nerctl
+              - name: containerdsock
+                mountPath: /var/run/containerd/containerd.sock
+              - name: backupdir
+                mountPath: /tmp/etcd_backup
+              - name: calicoctl
+                mountPath: /usr/sbin/calicoctl
+              - name: cert
+                mountPath: /etc/kubernetes/ssl/etcd
+              - name: calicocfg
+                mountPath: /etc/calico/calicoctl.cfg
+              - name: backup-etcd-code
+                mountPath: /root
+          restartPolicy: OnFailure
+          tolerations:
+            - operator: Exists
+          volumes:
+            - name: nerdctl
+              hostPath:
+                path: /usr/local/bin/nerdctl
+            - name: containerdsock
+              hostPath:
+                path: /var/run/containerd/containerd.sock
+            - name: calicoctl
+              hostPath:
+                path: /usr/sbin/calicoctl
+            - name: backupdir
+              persistentVolumeClaim:
+                claimName: etcd-backup
+            - name: cert
+              hostPath:
+                path: /etc/kubernetes/ssl/etcd
+            - name: calicocfg
+              hostPath:
+                path: /etc/calico/calicoctl.cfg
+            - name: backup-etcd-code
+              configMap:
+                defaultMode: 0700
+                name: backup-etcd-code
